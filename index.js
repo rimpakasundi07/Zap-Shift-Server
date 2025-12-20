@@ -30,7 +30,20 @@ async function run() {
     const parcelsCollection = db.collection("parcels");
 
     // parcel api
-    app.get("/parcel", async (req, res) => {});
+    app.get("/parcels", async (req, res) => {
+      const query = {};
+      const { email } = req.query;
+
+      // parcels?email=''&
+      if (email) {
+        query.senderEmail = email;
+      }
+      const cursor = parcelsCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    // to add
 
     app.post("/parcels", async (req, res) => {
       const parcel = req.body;
