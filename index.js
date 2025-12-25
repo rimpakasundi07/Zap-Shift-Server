@@ -141,8 +141,19 @@ async function run() {
       //  console.log("session id", sessionId);
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       console.log("session retrieve", session);
+      if (session.payment_status === "paid") {
+        const id = session.metadata.parcelId;
+        const query = { _id: new ObjectId(id) };
+        const update = {
+          $set: {
+            paymentStatus: "paid",
+          },
+        };
+        const result = await parcelsCollection.updateOne(query, update);
+        res.send(result);
+      }
       res.send({
-        success: true,
+        success: false,
       });
     });
 
