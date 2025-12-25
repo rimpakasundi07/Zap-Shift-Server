@@ -77,18 +77,47 @@ async function run() {
       res.send(result);
     });
 
-    // payment related API
-    app.post("/create-checkout-session", async (req, res) => {
+    // payment related apis
+    app.post("/payment-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.cost) * 100;
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
-            // Provide the exact Price ID (for example, price_1234) of the product you want to sell
             price_data: {
               currency: "USD",
-              unit_data: 1500,
+              unit_amount: amount,
               product_data: {
-                name: paymentInfo.parcelName,
+                name: `Please pay for: ${paymentInfo.parcelName}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        metadata: {
+          parcelId: paymentInfo.parcelId,
+        },
+        customer_email: paymentInfo.senderEmail,
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+      });
+
+      res.send({ url: session.url });
+    });
+
+    // old :
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.cost) * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data: {
+                name: `Please pay for: ${paymentInfo.parcelName}`,
               },
             },
 
@@ -97,7 +126,23 @@ async function run() {
         ],
         customer_email: paymentInfo.senderEmail,
         mode: "payment",
+        metadata: { parcelId: paymentInfo.parcelId },
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+      });
+      console.log(session);
+      res.send({ url: session.url });
+    });
+
+    // payment success related
+
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
+      //  console.log("session id", sessionId);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log("session retrieve", session);
+      res.send({
+        success: true,
       });
     });
 
