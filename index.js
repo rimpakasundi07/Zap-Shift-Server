@@ -28,25 +28,28 @@ async function run() {
     //
     const db = client.db("zap_shift_db");
     const parcelsCollection = db.collection("parcels");
+    //collection
+    const paymentCollection = db
+      .collection("payments")
 
-    // parcel api
-    app.get("/parcels", async (req, res) => {
-      const query = {};
-      const { email } = req.query;
+      // parcel api
+      .app.get("/parcels", async (req, res) => {
+        const query = {};
+        const { email } = req.query;
 
-      // parcels?email=''&
-      if (email) {
-        query.senderEmail = email;
-      }
+        // parcels?email=''&
+        if (email) {
+          query.senderEmail = email;
+        }
 
-      // options
+        // options
 
-      const options = { sort: { createdAt: -1 } };
+        const options = { sort: { createdAt: -1 } };
 
-      const cursor = parcelsCollection.find(query, options);
-      const result = await cursor.toArray();
-      res.send(result);
-    });
+        const cursor = parcelsCollection.find(query, options);
+        const result = await cursor.toArray();
+        res.send(result);
+      });
 
     // payment
 
@@ -126,7 +129,10 @@ async function run() {
         ],
         customer_email: paymentInfo.senderEmail,
         mode: "payment",
-        metadata: { parcelId: paymentInfo.parcelId },
+        metadata: {
+          parcelId: paymentInfo.parcelId,
+          parcelName: paymentInfo.parcelName,
+        },
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
       });
@@ -140,7 +146,9 @@ async function run() {
       const sessionId = req.query.session_id;
       //  console.log("session id", sessionId);
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+
       console.log("session retrieve", session);
+
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
         const query = { _id: new ObjectId(id) };
@@ -150,7 +158,27 @@ async function run() {
           },
         };
         const result = await parcelsCollection.updateOne(query, update);
-        res.send(result);
+        const payment = {
+          amount: session.amount_total / 100,
+          currency: session.currency,
+          customerEmail: session.customer_email,
+          parcelId: session.metadata.parcelId,
+          parcelName: session.metadata.parcelName,
+          transactionId: session.payment_intent,
+          paymentStatus: session.payment_status,
+          paidAt: new Date(),
+          // trackingId: "",
+        };
+        if (session.payment_status === "paid") {
+          const resultPayment = await paymentCollection.insertOne(payment);
+          res.send({
+            success: true,
+            modifyParcel: result,
+            paymentInfo: resultPayment,
+          });
+        }
+        // eta ekhane ney
+        // res.send(result);
       }
       res.send({
         success: false,
