@@ -7,6 +7,7 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const port = process.env.PORT || 3000;
 
 const crypto = require("crypto");
+const { runInContext } = require("vm");
 function generateTrackingId() {
   const prefix = "PRCL"; // your brand prefix
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, " ");
@@ -91,7 +92,7 @@ async function run() {
       res.send(result);
     });
 
-    // payment related apis
+    // payment
     app.post("/payment-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
       const amount = parseInt(paymentInfo.cost) * 100;
@@ -212,6 +213,18 @@ async function run() {
       res.send({
         success: false,
       });
+    });
+
+    // payment related API
+    app.get("/payments", async (req, res) => {
+      const email = req.query.email;
+      const query = {};
+      if (email) {
+        query.customerEmail === email;
+      }
+      const cursor = paymentCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
