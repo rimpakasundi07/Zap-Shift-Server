@@ -6,6 +6,18 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const port = process.env.PORT || 3000;
 
+const crypto = require("crypto");
+function generateTrackingId() {
+  const prefix = "PRCL"; // your brand prefix
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, " ");
+  // YYYY MM DD
+
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+  // 6 - char random hex
+
+  return `${prefix}-${date}-${random}`;
+}
+
 //middleware
 app.use(express.json());
 app.use(cors());
@@ -29,27 +41,26 @@ async function run() {
     const db = client.db("zap_shift_db");
     const parcelsCollection = db.collection("parcels");
     //collection
-    const paymentCollection = db
-      .collection("payments")
+    const paymentCollection = db.collection("payments");
 
-      // parcel api
-      .app.get("/parcels", async (req, res) => {
-        const query = {};
-        const { email } = req.query;
+    // parcel api
+    app.get("/parcels", async (req, res) => {
+      const query = {};
+      const { email } = req.query;
 
-        // parcels?email=''&
-        if (email) {
-          query.senderEmail = email;
-        }
+      // parcels?email=''&
+      if (email) {
+        query.senderEmail = email;
+      }
 
-        // options
+      // options
 
-        const options = { sort: { createdAt: -1 } };
+      const options = { sort: { createdAt: -1 } };
 
-        const cursor = parcelsCollection.find(query, options);
-        const result = await cursor.toArray();
-        res.send(result);
-      });
+      const cursor = parcelsCollection.find(query, options);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
     // payment
 
@@ -148,6 +159,7 @@ async function run() {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
 
       console.log("session retrieve", session);
+      const trackingId = generateTrackingId();
 
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
@@ -155,6 +167,7 @@ async function run() {
         const update = {
           $set: {
             paymentStatus: "paid",
+            trackingId: trackingId,
           },
         };
         const result = await parcelsCollection.updateOne(query, update);
@@ -167,13 +180,14 @@ async function run() {
           transactionId: session.payment_intent,
           paymentStatus: session.payment_status,
           paidAt: new Date(),
-          // trackingId: "",
         };
         if (session.payment_status === "paid") {
           const resultPayment = await paymentCollection.insertOne(payment);
           res.send({
             success: true,
             modifyParcel: result,
+            trackingId: trackingId,
+            transactionId: session.payment_intent,
             paymentInfo: resultPayment,
           });
         }
